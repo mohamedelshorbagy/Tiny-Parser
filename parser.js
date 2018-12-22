@@ -303,7 +303,6 @@ let stmtTypes = {
 // program -> stmt-seq
 function program() {
     stmt_seq();
-    console.log("-- Program found");
 }
 
 // stmt-seq -> stmt {; stmt}
@@ -345,37 +344,42 @@ function stmt() {
 // if-stmt -> if exp then stmt-seq [else stmt-seq] end
 function if_stmt() {
     match("if");
+    let if_node = tokenIdx - 1;
     graph[tokenIdx - 1] = { text: { name: 'IF' }, children: [], HTMLclass: 'first-draw' };
     state.parent_node = tokenIdx - 1;
     exp();
     match("then");
+    state.parent_node = if_node;
     stmt_seq();
     // token = ";";
-    if (token == "else")
+    if (token == "else") {
+        state.parent_node = if_node;
         stmt_seq();
+    }
     match("end");
-    console.log("- if statement found");
+    // console.log("- if statement found");
 }
 
 // repeat-stmt -> repeat stmt-seq until exp
 function repeat_stmt() {
     match("repeat");
-    graph[tokenIdx] = { text: { name: 'REPEAT' }, children: [], HTMLclass: 'first-draw' };
-    state.parent_node = tokenIdx;
+    let repeat_node = tokenIdx - 1;
+    graph[tokenIdx - 1] = { text: { name: 'REPEAT' }, children: [], HTMLclass: 'first-draw' };
+    state.parent_node = tokenIdx - 1;
     stmt_seq();
     match("until");
+    state.parent_node = repeat_node;
     exp();
-    console.log("- repeat found");
+    // console.log("- repeat found");
 }
 
 // read-stmt -> read identifier
 function read_stmt() {
-    console.log('first', token);
     match("read");
     match("", "id");
     graph[tokenIdx - 1] = { text: { name: `READ ${lines[tokenIdx - 1]}` }, children: [], HTMLclass: 'first-draw' };
     state.parent_node = tokenIdx - 1;
-    console.log("- read found");
+    // console.log("- read found");
 }
 
 // write-stmt -> write exp
@@ -384,7 +388,7 @@ function write_stmt() {
     graph[tokenIdx] = { text: { name: `WRITE` }, children: [], HTMLclass: 'first-draw' };
     state.parent_node = tokenIdx;
     exp();
-    console.log("- write found");
+    // console.log("- write found");
 }
 
 // exp -> simple-exp [comparison-op simple-exp]
