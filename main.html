@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <link rel="stylesheet" href="bootstrap.min.css?v0.1">
+    <link rel="stylesheet" href="./treant-js/Treant.css">
+    <link rel="stylesheet" href="main.css">
+</head>
+
+<body>
+
+    <div class="app container">
+        <textarea id="tiny-lang" cols="30" rows="10" placeholder="Code ..." class="form-control" style="resize: none;"></textarea>
+        <button class="btn btn-primary" id="btn-generate">Generate</button>
+        <hr>
+    </div>
+
+    <div id="tree-simple" style="width:100vw; height: 100vh"> </div>
+
+
+    <!-- <script src="./node_modules/pegjs/lib/peg.js"></script> -->
+    <script src="./treant-js/vendor/raphael.js"></script>
+    <script src="./treant-js/Treant.js"></script>
+    <script src="parser.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,7 @@
+read x;
+x:=x+3/(x-4);
+x:=x+3/x;
+if 0<x then
+ x:=1234
+end;
+fact:=x
