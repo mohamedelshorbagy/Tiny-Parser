@@ -13,8 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "electron": "^1.8.2",
-    "pegjs": "^0.10.0"
+    "electron": "^1.8.2"
   },
   "devDependencies": {
     "electron-packager": "^11.2.0",
