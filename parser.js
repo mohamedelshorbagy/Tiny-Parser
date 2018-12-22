@@ -112,8 +112,6 @@ function strToExp(str) {
     return "ERROR";
 
 }
-
-
 let graph = [];
 
 
@@ -121,12 +119,14 @@ let graph = [];
 
 let res_words = ["if", "then", "else", "end", "repeat", "until", "read", "write", ";"]
 let sp_symbols = ["+", "-", "*", "/", "=", "<", "(", ")", ";", ":=", ":"]
-let look_up_symbols = "abcdefghijklmnopqrstuvwxyz"
-let look_up_numbers = "1234567890"
 
 let state = {
     current_state: -1,
-    parent_node: -1
+    parent_node: -1,
+    horizontal: true,
+    lastFactor: null,
+    draw_id: false,
+    draw_id_block: true
 };
 
 function buildNodes(node) {
@@ -164,8 +164,6 @@ function buildNodes(node) {
     }
 
     return nodeObj;
-
-
 }
 
 
@@ -177,7 +175,6 @@ var token = "";
 let lines;
 
 btn.addEventListener('click', () => {
-    // lines = code.value.replace(/;/ig, ' ; ').replace(/\n/ig, '').split(' ').filter(x => x !== "");
     let newCode = code.value;
     let combined_sp_res = Array.from(new Set([...res_words, ...[":="]]));
     for (let word of combined_sp_res) {
@@ -196,25 +193,15 @@ btn.addEventListener('click', () => {
             lines.push(templines[i]);
         }
     }
+    tokenIdx = 0;
     token = lines[tokenIdx];
     program();
-    graph = graph.filter(x => x !== undefined || x !== null)
+    graph = graph.filter(x => x !== undefined || x !== null);
+    console.log(graph);
     show_graph(graph);
 })
 
-function exprNodes(str) {
-    var expression = strToExp(str);
-    if (expression instanceof Node) {
-        let childNodes = buildNodes(expression);
-        return childNodes;
-    } else {
-        let childNodes = { text: { name: `${expression}` }, children: [], HTMLclass: 'first-draw' };
-        return childNodes;
-    }
-}
 
-
-// let str = 'b * (x-y)';
 
 function show_graph(graph) {
     let simple_chart_config = {
@@ -250,24 +237,6 @@ function show_graph(graph) {
 
 
 
-function getStmtType(s) {
-    let { IF, ASSIGN, READ, WRITE, REPEAT, ERROR, ID } = stmtTypes;
-    if (s == "if")
-        return IF;
-    if (!res_words.includes(s) && /^[a-zA-Z_$][a-zA-Z_$0-9]*$/g.test(s))
-        return ID
-    if (s == ":=")
-        return ASSIGN;
-    if (s == "read")
-        return READ;
-    if (s == "write")
-        return WRITE;
-    if (s == "repeat")
-        return REPEAT;
-    else
-        return ERROR;
-}
-
 function match(s, type = null) {
     if (s === "" && type === "id") {
         if (
@@ -276,15 +245,15 @@ function match(s, type = null) {
         ) {
             tokenIdx++; // get next token
             token = lines[tokenIdx];
+            return true;
         }
     }
     if (s == token) {
         tokenIdx++;
         token = lines[tokenIdx]; // get next token
+        return true;
     }
-    else {
-        // console.log("program not found")
-    }
+    return false;
 }
 
 
@@ -296,129 +265,373 @@ let stmtTypes = {
     READ: 3,
     WRITE: 4,
     ERROR: 5,
-    ID: 6
+    ID: 6,
 };
 
 
 // program -> stmt-seq
 function program() {
-    stmt_seq();
+    let str = stmt_seq();
+    if (!str) {
+        console.log('ERROR');
+    }
+    console.log('Program Found!');
 }
 
 // stmt-seq -> stmt {; stmt}
 function stmt_seq() {
-    stmt();
-    while (token == ";") {
-        match(";");
-        stmt();
+    let st = stmt();
+    while (match(";")) {
+        st = stmt();
     }
+    return st;
 }
 
 // stmt -> if-stmt | repeat-stmt | assign-stmt | read-stmt | write-stmt
 function stmt() {
-    let { IF, ID, REPEAT, ASSIGN, READ, WRITE, ERROR } = stmtTypes;
-    switch (getStmtType(token)) {
-        case IF:
-            if_stmt();
-            break;
-        case REPEAT:
-            repeat_stmt();
-            break;
-        case ID:
-            is_id();
-            break;
-        case READ:
-            read_stmt();
-            break;
-        case WRITE:
-            write_stmt();
-            break;
-        case ERROR:
-            console.log('no stmt found');
-            break;
-        default:
-            break;
+
+    let str = if_stmt() || repeat_stmt() || assign_stmt() || read_stmt() || write_stmt();
+
+    if (!str) {
+        return false;
+    }
+    return str;
+
+}
+
+function assign_stmt() {
+    state.draw_id = false;
+    state.draw_id_block = false;
+    let testAssign = is_id();
+    state.draw_id_block = true;
+    if (testAssign) {
+        testAssign = match(":=");
+        if (testAssign) {
+            let assign_node = { text: { name: `Assign ${lines[tokenIdx - 2]}` }, children: [], HTMLclass: 'first-draw' };
+            if (state.horizontal) {
+                state.parent_node = tokenIdx - 2;
+                graph[state.parent_node] = { text: { name: `Assign ${lines[state.parent_node]}` }, children: [], HTMLclass: 'first-draw' }
+            } else {
+                let id_node = tokenIdx - 2;
+                graph[state.parent_node].children.push({ text: { name: `Assign ${lines[id_node]}` }, children: [], HTMLclass: 'first-draw' })
+                state.parent_node = id_node;
+            }
+            state.draw_horizontal = false
+            state.draw_id = false
+            state.last_factor = null
+
+            testAssign = exp();
+            if (testAssign) {
+                if (state.lastFactor) {
+                    graph[state.parent_node].children.push(state.lastFactor);
+                }
+                state.horizontal = true;
+                state.draw_id = true;
+                state.draw_id_block = true;
+                return true;
+            } else {
+                return false;
+            }
+
+        } else {
+            return false;
+        }
+
+    } else {
+        return false;
     }
 }
 
 // if-stmt -> if exp then stmt-seq [else stmt-seq] end
 function if_stmt() {
-    match("if");
-    let if_node = tokenIdx - 1;
-    graph[tokenIdx - 1] = { text: { name: 'IF' }, children: [], HTMLclass: 'first-draw' };
-    state.parent_node = tokenIdx - 1;
-    exp();
-    match("then");
-    state.parent_node = if_node;
-    stmt_seq();
-    // token = ";";
-    if (token == "else") {
-        state.parent_node = if_node;
-        stmt_seq();
+    let testIf = match("if");
+    if (testIf) {
+        state.parent_node = tokenIdx - 1;
+        graph[state.parent_node] = { text: { name: 'IF' }, children: [], HTMLclass: 'first-draw' };
+        let if_node = tokenIdx - 1;
+        let rec = state.parent_node;
+        state.horizontal = false;
+        testIf = exp();
+        if (testIf) {
+            testIf = match("then");
+            if (testIf) {
+                state.parent_node = if_node;
+                state.horizontal = false;
+                testIf = stmt_seq();
+                if (testIf) {
+
+                    if (token == "else") {
+                        state.parent_node = if_node;
+                        state.horizontal = false;
+                        testIf = stmt_seq();
+                        if (testIf) {
+
+                        } else {
+                            return false;
+                        }
+                    }
+                } else {
+                    return false;
+                }
+
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        // token = ";";
+        testIf = match("end");
+        if (testIf) {
+            state.parent_node = rec;
+            state.horizontal = true;
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
     }
-    match("end");
     // console.log("- if statement found");
 }
 
 // repeat-stmt -> repeat stmt-seq until exp
 function repeat_stmt() {
-    match("repeat");
-    let repeat_node = tokenIdx - 1;
-    graph[tokenIdx - 1] = { text: { name: 'REPEAT' }, children: [], HTMLclass: 'first-draw' };
-    state.parent_node = tokenIdx - 1;
-    stmt_seq();
-    match("until");
-    state.parent_node = repeat_node;
-    exp();
+    let testRep = match("repeat");
+    if (testRep) {
+        state.parent_node = tokenIdx - 1;
+        graph[state.parent_node] = { text: { name: 'REPEAT' }, children: [], HTMLclass: 'first-draw' };
+        let repeat_node = state.parent_node;
+        state.horizontal = false;
+        testRep = stmt_seq();
+        if (testRep) {
+            testRep = match('until');
+            if (testRep) {
+                state.parent_node = repeat_node;
+                state.horizontal = false;
+                testRep = exp();
+                if (testRep) {
+                    state.horizontal = true;
+                    return true;
+                } else {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
     // console.log("- repeat found");
 }
 
 // read-stmt -> read identifier
 function read_stmt() {
-    match("read");
-    match("", "id");
-    graph[tokenIdx - 1] = { text: { name: `READ ${lines[tokenIdx - 1]}` }, children: [], HTMLclass: 'first-draw' };
-    state.parent_node = tokenIdx - 1;
-    // console.log("- read found");
+    let testRead = match("read");
+    if (testRead) {
+        state.draw_id_block = false;
+        testRead = is_id();
+        if (testRead) {
+            state.parent_node = tokenIdx - 1;
+            let rec = tokenIdx - 1;
+            graph[state.parent_node] = { text: { name: `READ ${lines[state.parent_node]}` }, children: [], HTMLclass: 'first-draw' };
+            state.draw_id_block = true;
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
 }
 
 // write-stmt -> write exp
 function write_stmt() {
-    match("write");
-    graph[tokenIdx] = { text: { name: `WRITE` }, children: [], HTMLclass: 'first-draw' };
-    state.parent_node = tokenIdx;
-    exp();
-    // console.log("- write found");
+    let testWrite = match("write");
+    if (testWrite) {
+        state.parent_node = tokenIdx;
+        if (state.horizontal) {
+            graph[state.parent_node] = { text: { name: `WRITE` }, children: [], HTMLclass: 'first-draw' };
+        } else {
+            let write_node = { text: { name: `WRITE` }, children: [], HTMLclass: 'first-draw' };
+            let write_node_id = tokenIdx;
+            graph[state.parent_node].children.push(write_node);
+            state.parent_node = write_node_id;
+        }
+        state.horizontal = false;
+        testWrite = exp(true);
+        if (testWrite) {
+            state.horizontal = true;
+            state.draw_id = true;
+            state.draw_id_block = true;
+            return true;
+        } else {
+            return false;
+        }
+
+    } else {
+        return false;
+    }
 }
 
-// exp -> simple-exp [comparison-op simple-exp]
-function exp() {
-    /**
-     * States
-     *   (1) Expression 
-     *   (2) Comparison
-     */
-    let str = '';
-    while (lines[tokenIdx] && !res_words.includes(lines[tokenIdx])) {
-        str += lines[tokenIdx];
+
+
+
+function exp(draw_id = false) {
+    state.draw_id = draw_id;
+    state.lastFactor = null;
+    let testExp = simple_exp();
+    var rec = state.parent_node
+    var current_draw_h = state.draw_horizontal
+    if (testExp) {
+        if (match("<") || match("=")) {
+            state.draw_id_block = true;
+            let exp_node_comp = { text: { name: `OP ${lines[tokenIdx - 1]}` }, children: [], HTMLclass: 'first-draw' };
+            if (state.horizontal) {
+                state.parent_node = tokenIdx - 1;
+                graph[state.parent_node] = exp_node_comp;
+            } else {
+                graph[state.parent_node].children.push(exp_node_comp);
+                state.parent_node = tokenIdx - 1;
+            }
+
+            if (state.lastFactor) {
+                graph[state.parent_node].children.push(state.lastFactor);
+            }
+            state.horizontal = false;
+            state.draw_id_block = true;
+            testExp = simple_exp();
+            if (testExp) {
+                state.horizontal = current_draw_h;
+                state.parent_node = rec;
+                return true;
+            } else {
+                return false;
+            }
+
+        }
+
+    } else {
+        return false;
+    }
+}
+
+// simple-exp -> term { addop term }
+function simple_exp() {
+    state.lastFactor = null;
+    let testSimpleExp = term();
+    if (testSimpleExp) {
+
+        var rec = state.parent_node
+        var current_draw_h = state.draw_horizontal
+        while (match("+") || match('-')) {
+            state.draw_id_block = true;
+            let simpleExpNode = { text: { name: `OP ${lines[tokenIdx - 1]}` }, children: [], HTMLclass: 'first-draw' };
+            if (state.horizontal) {
+                state.parent_node = simpleExpNode;
+            } else {
+                graph[state.parent_node].children.push(simpleExpNode);
+                state.parent_node = tokenIdx - 1;
+            }
+
+            if (state.lastFactor) {
+                graph[state.parent_node].children.push(simpleExpNode);
+            }
+            state.horizontal = false;
+
+            state.lastFactor = null;
+
+            testSimpleExp = term();
+            if (state.lastFactor) {
+                graph[parent_node].children.push(last_factor)
+                state.lastFactor = null
+            }
+
+            if (testSimpleExp) {
+                state.lastFactor = null;
+            } else {
+                return false;
+            }
+        }
+        state.horizontal = current_draw_h;
+        state.parent_node = rec;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+// term -> factor { mulop factor }
+function term() {
+    state.lastFactor = null;
+    let testTerm = factor();
+    if (testTerm) {
+        var rec = state.parent_node;
+        var current_draw_h = state.horizontal;
+        while (match("*") || match("/")) {
+            state.draw_id_block = true;
+            let termNode = { text: { name: `OP ${lines[tokenIdx - 1]}` }, children: [], HTMLclass: 'first-draw' };
+            if (state.horizontal) {
+                state.parent_node = tokenIdx - 1;
+                graph[state.parent_node] = termNode;
+            } else {
+                graph[state.parent_node].children.push(termNode);
+                state.parent_node = tokenIdx - 1;
+            }
+
+            if (state.lastFactor) {
+                graph[state.parent_node].children.push(state.lastFactor);
+            }
+            state.horizontal = false;
+            state.lastFactor = null;
+            testTerm = factor();
+            graph[state.parent_node].children.push(state.lastFactor);
+            state.lastFactor = null;
+            if (!testTerm) {
+                return false;
+            }
+
+        }
+        state.parent_node = rec;
+    } else {
+        return false;
+    }
+}
+
+// factor -> (exp) | number | identifier
+function factor() {
+    let str = match("(") || exp() || match(")");
+    str = str || is_number();
+    str = str || is_id();
+    return str;
+}
+
+
+
+function is_number() {
+    if (/^[0-9]+$/ig.test(token)) {
+        let num_node = { text: { name: `${token}` } };
+        if (state.draw_id) {
+            graph[state.parent_node] = num_node;
+        }
+        state.lastFactor = token;
         tokenIdx++;
     }
-    token = lines[tokenIdx]; // Update Token Value
-    let nodes = exprNodes(str);
-    graph[state.parent_node].children.push(nodes);
-
 }
-
-
-
 
 
 function is_id() {
-    match("", "id");
-    match(":=");
-    // Assignment Process
-    // Add to Graph
-    state.parent_node = tokenIdx - 2;
-    graph[tokenIdx - 2] = { text: { name: `Assign ${lines[tokenIdx - 2]}` }, children: [], HTMLclass: 'first-draw' };
-    exp();
+    let testId = match("", "id");
+    if (testId) {
+        let id_node = { text: { name: `${lines[tokenIdx - 1]}` }, children: [], HTMLclass: 'first-draw' };
+        if (state.draw_id && state.draw_id_block) {
+            graph[state.parent_node].children.push(id_node);
+        }
+        state.lastFactor = id_node;
+    }
+
+    console.log(graph);
 }
